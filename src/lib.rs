@@ -1,15 +1,11 @@
 pub mod core {
     use std::{collections::HashMap, process::Command};
 
-    #[derive(Debug)]
-    pub struct Commit {
-        pub owner: String,
-        pub rel_time: String,
-        pub message: String,
-        pub hash: String,
+    pub struct Repo {
+        pub commits: Vec<Commit>,
     }
 
-    impl Commit {
+    impl Repo {
         pub fn get_total_commits(path: &str) -> Result<u32, Box<dyn std::error::Error>> {
             let go_to = format!("cd {path}");
             let cmd = format!("{go_to} && git rev-list --count main");
@@ -45,6 +41,14 @@ pub mod core {
         }
     }
 
+    #[derive(Debug)]
+    pub struct Commit {
+        pub owner: String,
+        pub rel_time: String,
+        pub message: String,
+        pub hash: String,
+    }
+
     impl From<String> for Commit {
         fn from(value: String) -> Self {
             let mut arr = value.split(" - ");
@@ -62,27 +66,27 @@ pub mod core {
         }
     }
 
-    pub struct GitLogger {
+    pub struct GitLog {
         path: String,
         skip: u32,
         max: u32,
     }
 
-    impl GitLogger {
-        pub fn new(path: String) -> GitLogger {
-            GitLogger {
+    impl GitLog {
+        pub fn new(path: String) -> GitLog {
+            GitLog {
                 path,
                 skip: 0,
                 max: 10,
             }
         }
 
-        pub fn skip(&mut self, n: u32) -> &mut GitLogger {
+        pub fn skip(&mut self, n: u32) -> &mut GitLog {
             self.skip = n;
             self
         }
 
-        pub fn max_count(&mut self, n: u32) -> &mut GitLogger {
+        pub fn max_count(&mut self, n: u32) -> &mut GitLog {
             self.max = n;
             self
         }

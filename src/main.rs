@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use gitty::core::{Commit, GitLogger};
+use gitty::core::{Commit, GitLog, Repo};
 
 fn main() {
     println!("Running gitty...");
@@ -15,7 +15,7 @@ fn main() {
         .expect("Repo path is missing.")
         .to_string();
 
-    let total_commits = Commit::get_total_commits(&repo_path).unwrap();
+    let total_commits = Repo::get_total_commits(&repo_path).unwrap();
     println!("total commits = {total_commits}");
 
     let batch_size = 100;
@@ -25,7 +25,7 @@ fn main() {
     let mut commits: Vec<Commit> = vec![];
 
     for n in 0..total_batch {
-        let commit_logs = GitLogger::new(repo_path.clone())
+        let commit_logs = GitLog::new(repo_path.clone())
             .skip(n * 100)
             .max_count(batch_size)
             .run()
@@ -36,6 +36,6 @@ fn main() {
         }
     }
 
-    let commits_by_owner = Commit::count_by_owner(commits);
+    let commits_by_owner = Repo::count_by_owner(commits);
     println!("commits by owner = {:#?}", commits_by_owner);
 }
