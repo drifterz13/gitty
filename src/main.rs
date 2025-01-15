@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use gitty::core::{Commit, GitLog, Repo};
+use gitty::{
+    repo::{commit::Commit, Repo},
+    GitLog,
+};
 
 fn main() {
     println!("Running gitty...");
@@ -26,7 +29,7 @@ fn main() {
 
     for n in 0..total_batch {
         let commit_logs = GitLog::new(repo_path.clone())
-            .skip(n * 100)
+            .skip(n * batch_size)
             .max_count(batch_size)
             .run()
             .unwrap();
