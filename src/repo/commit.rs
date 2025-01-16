@@ -8,7 +8,7 @@ pub struct Commit {
 
 impl From<String> for Commit {
     fn from(value: String) -> Self {
-        let mut arr = value.split(" - ");
+        let mut arr = value.split("|");
         let hash = arr.next().expect("Commit hash is missing").to_string();
         let owner = arr.next().expect("Owner is missing").to_string();
         let rel_time = arr.next().expect("Relative time is miisng").to_string();
