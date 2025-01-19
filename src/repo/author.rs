@@ -1,43 +1,45 @@
-use std::{collections::HashMap, path::Path};
+use super::{commit::Commit, stats::Stats};
+use std::rc::{Rc, Weak};
 
-use crate::utils::git::GitCommand;
+#[derive(Debug)]
+pub struct AuthorStats {
+    pub loc: Stats,
+    pub loc_diff: i32,
+    pub total_commits: usize,
+}
 
 #[derive(Debug)]
 pub struct Author {
-    name: String,
+    pub name: String,
+    commits: Vec<Weak<Commit>>,
 }
 
-// TODO: Do we need it?
 impl Author {
-    pub fn get_author_prs(
-        &self,
-        repo_path: &Path,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        let git_cmd = GitCommand::new(repo_path.to_path_buf());
-        let output_str = git_cmd
-            .run(&[
-                "log",
-                "--merges",
-                "--pretty=format:%an|%H",
-                "--first-parent",
-                "main",
-            ])
-            .unwrap();
+    pub fn new(name: String, commits: Vec<Rc<Commit>>) -> Self {
+        let commits = commits.iter().map(|commit| Rc::downgrade(commit)).collect();
+        Self { name, commits }
+    }
 
-        let prs_by_author: HashMap<String, Vec<String>> = output_str
-            .lines()
-            .filter_map(|line| {
-                line.split_once("|")
-                    .map(|(author_name, hash)| (author_name.to_string(), hash.to_string()))
-            })
-            .fold(HashMap::new(), |mut acc, (author, hash)| {
-                acc.entry(author).or_default().push(hash);
-                acc
-            });
+    pub fn get_stats(&self) -> AuthorStats {
+        let (insertions, deletions) = self.commits.iter().fold((0, 0), |mut acc, commit| {
+            let commit = &commit.upgrade().unwrap();
+            match &commit.stats {
+                Some(stats) => {
+                    acc.0 += stats.insertions;
+                    acc.1 += stats.deletions;
+                    acc
+                }
+                None => acc,
+            }
+        });
 
-        prs_by_author
-            .get(&self.name)
-            .cloned()
-            .ok_or_else(|| format!("No PRs found for author: {}", self.name).into())
+        AuthorStats {
+            loc: Stats {
+                insertions,
+                deletions,
+            },
+            loc_diff: (insertions - deletions).try_into().unwrap(),
+            total_commits: self.commits.len(),
+        }
     }
 }

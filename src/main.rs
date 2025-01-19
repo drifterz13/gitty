@@ -1,5 +1,5 @@
 use gitty::repo::Repo;
-use std::{collections::HashSet, path::Path};
+use std::path::Path;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -13,14 +13,11 @@ fn main() {
     let total_commits = Repo::get_total_commits(repo_path.to_path_buf()).unwrap();
     println!("total commits = {total_commits}");
 
-    let commits_by_owner = repo.merge_commits_by_owner();
+    let commits_by_owner = repo.commits_by_owner();
     println!("commits by owner = {:#?}", commits_by_owner);
 
-    let authors: HashSet<String> = repo
-        .commits
-        .borrow()
-        .iter()
-        .map(|commit| commit.owner.to_string())
-        .collect();
-    println!("repo authors = {:#?}", authors);
+    for author in repo.authors.borrow().iter() {
+        let author_stats = author.get_stats();
+        println!("author name {} stats = {:#?}", author.name, author_stats);
+    }
 }

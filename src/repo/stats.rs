@@ -1,10 +1,10 @@
 #[derive(Debug)]
-pub struct CommitStats {
-    insertions: u32,
-    deletions: u32,
+pub struct Stats {
+    pub insertions: u32,
+    pub deletions: u32,
 }
 
-impl CommitStats {
+impl Stats {
     pub fn set_insertions(mut self, insertions: u32) -> Self {
         self.insertions = insertions;
         self
@@ -16,9 +16,9 @@ impl CommitStats {
     }
 }
 
-impl Default for CommitStats {
+impl Default for Stats {
     fn default() -> Self {
-        CommitStats {
+        Self {
             insertions: 0,
             deletions: 0,
         }

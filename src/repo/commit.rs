@@ -1,11 +1,8 @@
 use regex::Regex;
-use stats::CommitStats;
 use std::rc::{Rc, Weak};
 
-use super::Repo;
+use super::{stats::Stats, Repo};
 use crate::utils::git::GitCommand;
-
-mod stats;
 
 #[derive(Debug)]
 pub struct Commit {
@@ -14,7 +11,7 @@ pub struct Commit {
     pub rel_time: String,
     pub message: String,
     pub hash: String,
-    pub stats: Option<CommitStats>,
+    pub stats: Option<Stats>,
 }
 
 impl Commit {
@@ -44,7 +41,7 @@ impl Commit {
         commit
     }
 
-    pub fn get_stats(&self) -> Result<CommitStats, Box<dyn std::error::Error>> {
+    pub fn get_stats(&self) -> Result<Stats, Box<dyn std::error::Error>> {
         let repo_path = match self.repo.upgrade() {
             Some(repo) => repo.path.clone(),
             None => panic!("Repo has been dropped."),
@@ -55,7 +52,7 @@ impl Commit {
             .run(&["show", "--stat", &format!("{}", self.hash)])
             .unwrap();
         let stats_line = output_str.lines().last().unwrap().trim();
-        let stats = CommitStats::default();
+        let stats = Stats::default();
 
         // 2 files changed, 8 insertions(+), 4 deletions(-)
         let re = Regex::new(r"(?P<files>\d+) files? changed(?:, (?P<insertions>\d+) insertions?\(\+\))?(?:, (?P<deletions>\d+) deletions?\(-\))?").unwrap();

@@ -1,16 +1,23 @@
-use crate::utils::git::GitCommand;
 use author::Author;
 use commit::Commit;
-use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    rc::Rc,
+};
+
+use crate::utils::git::GitCommand;
 
 pub mod author;
 pub mod commit;
+pub mod stats;
 
 #[derive(Debug)]
 pub struct Repo {
     pub path: PathBuf,
-    pub commits: RefCell<Vec<Commit>>,
-    pub authors: Vec<Author>,
+    pub commits: RefCell<Vec<Rc<Commit>>>,
+    pub authors: RefCell<Vec<Author>>,
 }
 
 impl Default for Repo {
@@ -18,7 +25,7 @@ impl Default for Repo {
         Repo {
             path: PathBuf::new(),
             commits: RefCell::new(vec![]),
-            authors: vec![],
+            authors: RefCell::new(vec![]),
         }
     }
 }
@@ -30,10 +37,16 @@ impl Repo {
             ..Default::default()
         });
         let commits = Repo::create_commits(&repo);
-
+        let commits: Vec<Rc<Commit>> = commits.into_iter().map(|commit| Rc::new(commit)).collect();
         {
             let mut repo_commits_mut = repo.commits.borrow_mut();
             repo_commits_mut.extend(commits);
+        };
+
+        let authors = Repo::create_authors(&repo);
+        {
+            let mut repo_authors_mut = repo.authors.borrow_mut();
+            repo_authors_mut.extend(authors);
         };
 
         repo
@@ -45,8 +58,8 @@ impl Repo {
             .run(&[
                 "log",
                 "--oneline",
-                "--merges",
                 &format!("--pretty=format:%h|%an|%ar|%s"),
+                "main",
             ])
             .unwrap();
 
@@ -54,12 +67,31 @@ impl Repo {
             .lines()
             .into_iter()
             .map(|commit_log| {
-                let commit = Commit::build(repo, commit_log.to_string());
+                let commit = Commit::build(&repo, commit_log.to_string());
                 commit
             })
             .collect();
 
         commits
+    }
+
+    fn create_authors(repo: &Rc<Repo>) -> Vec<Author> {
+        let repo_authors = repo.get_repo_authors();
+        let commits = repo.commits.borrow();
+        let mut authors = Vec::new();
+
+        for author in repo_authors.into_iter() {
+            let author_commits: Vec<Rc<Commit>> = commits
+                .iter()
+                .filter(|commit| commit.owner == author)
+                .map(|commit| Rc::clone(commit))
+                .collect();
+
+            let author = Author::new(author, author_commits);
+            authors.push(author);
+        }
+
+        authors
     }
 
     pub fn get_total_commits(path: PathBuf) -> Result<u32, Box<dyn std::error::Error>> {
@@ -73,11 +105,20 @@ impl Repo {
         Ok(count)
     }
 
-    pub fn merge_commits_by_owner(&self) -> HashMap<String, u32> {
+    pub fn get_repo_authors(&self) -> HashSet<String> {
+        let authors: HashSet<String> = self
+            .commits
+            .borrow()
+            .iter()
+            .map(|commit| commit.owner.to_string())
+            .collect();
+
+        authors
+    }
+
+    pub fn commits_by_owner(&self) -> HashMap<String, u32> {
         let git_cmd = GitCommand::new(self.path.clone());
-        let output_str = git_cmd
-            .run(&["shortlog", "-sn", "--merges", "main"])
-            .unwrap();
+        let output_str = git_cmd.run(&["shortlog", "-sn", "main"]).unwrap();
 
         let map: HashMap<String, u32> = output_str
             .lines()
