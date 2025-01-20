@@ -33,12 +33,14 @@ impl Author {
             }
         });
 
+        let loc_diff: i32 = (insertions as i32) - (deletions as i32);
+
         AuthorStats {
             loc: Stats {
                 insertions,
                 deletions,
             },
-            loc_diff: (insertions - deletions).try_into().unwrap(),
+            loc_diff,
             total_commits: self.commits.len(),
         }
     }

@@ -1,5 +1,7 @@
 use author::Author;
 use commit::Commit;
+use futures::stream;
+use futures::StreamExt;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -31,12 +33,12 @@ impl Default for Repo {
 }
 
 impl Repo {
-    pub fn build(path: PathBuf) -> Rc<Self> {
+    pub async fn build(path: PathBuf) -> Rc<Self> {
         let repo = Rc::new(Self {
             path,
             ..Default::default()
         });
-        let commits = Repo::create_commits(&repo);
+        let commits = Repo::create_commits(&repo).await;
         let commits: Vec<Rc<Commit>> = commits.into_iter().map(|commit| Rc::new(commit)).collect();
         {
             let mut repo_commits_mut = repo.commits.borrow_mut();
@@ -52,7 +54,7 @@ impl Repo {
         repo
     }
 
-    fn create_commits(repo: &Rc<Repo>) -> Vec<Commit> {
+    async fn create_commits(repo: &Rc<Repo>) -> Vec<Commit> {
         let git_cmd = GitCommand::new(repo.path.clone());
         let output_str = git_cmd
             .run(&[
@@ -66,13 +68,40 @@ impl Repo {
         let commits: Vec<Commit> = output_str
             .lines()
             .into_iter()
-            .map(|commit_log| {
-                let commit = Commit::build(&repo, commit_log.to_string());
-                commit
-            })
+            .map(|commit_log| Commit::build(&repo, commit_log.to_string()))
             .collect();
 
+        let commits = stream::iter(commits)
+            .map(|commit| {
+                let commit = Rc::new(commit);
+                async move {
+                    match commit.get_stats().await {
+                        Ok(stats) => Some((commit, stats)),
+                        Err(e) => {
+                            eprintln!("Failed to get stats for commit {}: {}", commit.hash, e);
+                            None
+                        }
+                    }
+                }
+            })
+            .buffer_unordered(10)
+            .filter_map(|result| async move { result })
+            .collect::<Vec<_>>()
+            .await;
+
         commits
+            .into_iter()
+            .filter_map(|(commit, stats)| match Rc::try_unwrap(commit) {
+                Ok(mut commit) => {
+                    commit.stats = Some(stats);
+                    Some(commit)
+                }
+                Err(_) => {
+                    eprintln!("Failed to unwrap commit reference");
+                    None
+                }
+            })
+            .collect()
     }
 
     fn create_authors(repo: &Rc<Repo>) -> Vec<Author> {

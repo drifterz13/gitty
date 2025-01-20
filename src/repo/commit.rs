@@ -2,7 +2,7 @@ use regex::Regex;
 use std::rc::{Rc, Weak};
 
 use super::{stats::Stats, Repo};
-use crate::utils::git::GitCommand;
+use crate::utils::future::AsyncCommand;
 
 #[derive(Debug)]
 pub struct Commit {
@@ -21,36 +21,42 @@ impl Commit {
         let owner = arr.next().expect("Owner is missing").to_string();
         let rel_time = arr.next().expect("Relative time is miisng").to_string();
         let message = arr.next().expect("Commit message is missing").to_string();
-
         let repo = Rc::downgrade(repo);
-        let mut commit = Commit {
+
+        Commit {
             repo,
             hash,
             owner,
             rel_time,
             message,
             stats: None,
-        };
-
-        let stats = commit
-            .get_stats()
-            .map_err(|e| format!("Failed to get commit stats: {:#?}", e))
-            .unwrap();
-
-        commit.stats = Some(stats);
-        commit
+        }
     }
 
-    pub fn get_stats(&self) -> Result<Stats, Box<dyn std::error::Error>> {
+    pub async fn get_stats(&self) -> Result<Stats, Box<dyn std::error::Error>> {
         let repo_path = match self.repo.upgrade() {
             Some(repo) => repo.path.clone(),
-            None => panic!("Repo has been dropped."),
+            None => return Err("Repo has been dropped.".into()),
         };
 
-        let git_cmd = GitCommand::new(repo_path);
-        let output_str = git_cmd
-            .run(&["show", "--stat", &format!("{}", self.hash)])
-            .unwrap();
+        let args: Vec<String> = vec!["show".to_string(), "--stat".to_string(), self.hash.clone()];
+        let mut cmd = AsyncCommand::new(String::from("git"))
+            .with_dir(repo_path)
+            .with_args(args)
+            .build();
+        cmd.stdout(std::process::Stdio::piped());
+
+        let output = cmd
+            .spawn()
+            .map_err(|e| format!("Failed to spawn git show --stat {}: {}", self.hash, e))?
+            .wait_with_output()
+            .await?;
+
+        if !output.status.success() {
+            return Err(format!("Command failed with status: {}", output.status).into());
+        }
+
+        let output_str = String::from_utf8(output.stdout)?;
         let stats_line = output_str.lines().last().unwrap().trim();
         let stats = Stats::default();
 
@@ -64,6 +70,7 @@ impl Commit {
             .name("deletions")
             .map_or(0, |m| m.as_str().parse::<u32>().unwrap_or(0));
         let stats = stats.set_insertions(insertions).set_deletions(deletions);
+
         Ok(stats)
     }
 }

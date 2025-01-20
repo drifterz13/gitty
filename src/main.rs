@@ -1,14 +1,15 @@
 use gitty::repo::Repo;
 use std::path::Path;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
         panic!("Missing arguments.")
     }
 
     let repo_path = Path::new(&args[1]);
-    let repo = Repo::build(repo_path.to_path_buf());
+    let repo = Repo::build(repo_path.to_path_buf()).await;
 
     let total_commits = Repo::get_total_commits(repo_path.to_path_buf()).unwrap();
     println!("total commits = {total_commits}");
